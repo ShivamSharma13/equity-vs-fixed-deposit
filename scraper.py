@@ -15,8 +15,8 @@ desired_payload_keys = {'__VIEWSTATE' : '' ,
 							'__VIEWSTATEGENERATOR' : '', 
 							'__EVENTVALIDATION' : '',
 							'WINDOW_NAMER' : '', 
-							'ctl00$ContentPlaceHolder1$btnSubmit.x' : '43', 
-							'ctl00$ContentPlaceHolder1$btnSubmit.y' : '14',
+							'ctl00$ContentPlaceHolder1$btnDownload.x' : '43', 
+							'ctl00$ContentPlaceHolder1$btnDownload.y' : '14',
 							'ctl00$ContentPlaceHolder1$cmbYearly' : '2001', 
 							'ctl00$ContentPlaceHolder1$DDate' : '', 
 							'ctl00$ContentPlaceHolder1$DMY' : 'rdbYearly',
@@ -44,9 +44,8 @@ def hit(url):
 	payload = gather_request_payload(soup)
 	r = requests.post(url , data = payload , headers = headers, stream = True)
 	print(r.status_code)
-	# print(r.content) : Recieved desired html page here.
-
-
+	print(r.content)
+	
 def gather_request_payload(soup):
 	input_tags = soup.find_all('input')
 	filtered_tags = list()
