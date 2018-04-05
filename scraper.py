@@ -59,7 +59,7 @@ def fetch_company_codes():
 
 def fetch_formatted_name(company_code):
 	url = 'https://www.bseindia.com/SiteCache/90D/SmartGetQuoteData.aspx?Type=EQ&text='
-	company_code = '500238'
+	#company_code = '500238'
 	r = requests.get(url+company_code)
 	soup = BeautifulSoup(r.content, 'html.parser')
 	anchors = soup.find_all('a')
@@ -98,16 +98,20 @@ def hit(url):
 	r = requests.get(url)
 	soup = BeautifulSoup(r.content, 'html.parser')
 	payload = gather_request_payload(soup)
-	fetch_formatted_name(34)
-	r = requests.post(url , data = payload , headers = headers, stream = True)
-	with open('data.csv' , 'wb') as file:
-		for chunk in r.iter_content(chunk_size = 128):
-			file.write(chunk)
+	company_codes = fetch_company_codes()
+	for idx, company_code in enumerate(company_codes):
+		if idx == 3:
+			break
+		file_name = 'data/data_' + company_code + '.csv'
+		fetch_formatted_name(company_code)
+		r = requests.post(url , data = payload , headers = headers, stream = True)
+		with open(file_name , 'wb') as file:
+			for chunk in r.iter_content(chunk_size = 128):
+				file.write(chunk)
 
 if __name__ == "__main__":
 	url = 'https://www.bseindia.com/markets/equity/EQReports/StockPrcHistori.aspx?expandable=14&flag=0'
-	#hit(url)
-	fetch_company_codes()
+	hit(url)
 
 
 
