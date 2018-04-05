@@ -1,6 +1,7 @@
 import requests
 from bs4 import BeautifulSoup
 import pprint
+import re
 
 headers = { 'User-Agent' : 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:59.0) Gecko/20100101 Firefox/59.0'}
 
@@ -37,6 +38,24 @@ desired_payload_keys = {'__VIEWSTATE' : '' ,
 							'ctl00$ContentPlaceHolder1$search' : 'rad_no1', 
 							'myDestination' : '#',
 						}
+def fetch_company_codes():
+	'''
+	The function picks up top 100 companies listed.
+	'''
+	url = 'https://www.bseindia.com/markets/equity/EQReports/TopMarketCapitalization.aspx'
+	company_codes = []
+	r = requests.get(url)
+	soup = BeautifulSoup(r.content, 'html.parser')
+	table_rows = soup.find_all('tr')
+	for table_row in table_rows:
+		filtered_table_rows = table_row.find_all('td', {'class' : 'TTRow_right'})
+		for filtered_table_row in filtered_table_rows:
+			if re.match(r'^[\d]{6}' , str(filtered_table_row.string)):
+				company_codes.append(filtered_table_row.string)
+	#print(company_codes)
+	#print(len(company_codes))
+	return company_codes
+
 
 def fetch_formatted_name(company_code):
 	url = 'https://www.bseindia.com/SiteCache/90D/SmartGetQuoteData.aspx?Type=EQ&text='
@@ -87,7 +106,8 @@ def hit(url):
 
 if __name__ == "__main__":
 	url = 'https://www.bseindia.com/markets/equity/EQReports/StockPrcHistori.aspx?expandable=14&flag=0'
-	hit(url)
+	#hit(url)
+	fetch_company_codes()
 
 
 
