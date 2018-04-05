@@ -2,6 +2,7 @@ import requests
 from bs4 import BeautifulSoup
 import pprint
 import re
+import os
 
 headers = { 'User-Agent' : 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:59.0) Gecko/20100101 Firefox/59.0'}
 
@@ -31,13 +32,40 @@ desired_payload_keys = {'__VIEWSTATE' : '' ,
 							'ctl00$ContentPlaceHolder1$Hidden2' : '',
 							'ctl00$ContentPlaceHolder1$hiddenScripCode' : '', 
 							'ctl00$ContentPlaceHolder1$hidDMY' : 'Y', 
-							'ctl00$ContentPlaceHolder1$hidFromDate' : '20000101', 
+							'ctl00$ContentPlaceHolder1$hidFromDate' : '19950101', 
 							'ctl00$ContentPlaceHolder1$hidOldDMY' : '', 
 							'ctl00$ContentPlaceHolder1$hidToDate' : '20180403', 
 							'ctl00$ContentPlaceHolder1$hidYear' : '', 
 							'ctl00$ContentPlaceHolder1$search' : 'rad_no1', 
 							'myDestination' : '#',
 						}
+
+def if_retry_required():
+	os.chdir('data')
+	dir_files = os.listdir()
+	if 'company_codes.txt' in dir_files:
+		with open('company_codes.txt', 'r') as file:
+			file_content = file.read()
+			company_codes = file_content.split(' ')
+		fetched_codes = []
+		for file in dir_files:
+			regex = re.search(r'[\d]{6}', str(file))
+			if regex:
+				indices = regex.span()
+				fetched_codes.append(file[indices[0]:indices[1]])
+		remaining_codes = []
+		for company_code in company_codes:
+			if (company_code not in fetched_codes) and (company_code != ''):
+				remaining_codes.append(company_code)
+		os.chdir('..')
+		if not remaining_codes:
+			print('Data already fetched.')
+			exit()
+		return remaining_codes
+	else:
+		os.chdir('..')
+		False
+
 def fetch_company_codes():
 	'''
 	The function picks up top 100 companies listed.
@@ -54,10 +82,15 @@ def fetch_company_codes():
 				company_codes.append(filtered_table_row.string)
 	#print(company_codes)
 	#print(len(company_codes))
+	codes_in_str = ''
+	for item in company_codes:	
+		codes_in_str+=(item+' ')
+	with open('data/company_codes.txt' , 'w') as file:
+		file.write(codes_in_str)
 	return company_codes
 
 
-def fetch_formatted_name(company_code):
+def update_payload(company_code):
 	url = 'https://www.bseindia.com/SiteCache/90D/SmartGetQuoteData.aspx?Type=EQ&text='
 	#company_code = '500238'
 	r = requests.get(url+company_code)
@@ -92,29 +125,50 @@ def gather_request_payload(soup):
 				desired_payload_keys[key] = value.replace(' ' , '+')
 			else:
 				pass
+	print("Website: True")
 	return desired_payload_keys
 
-def hit(url):
+def fetch_csv(url, payload, company_code):
+	file_name = 'data/data_' + company_code + '.csv'
+	try:
+		r = requests.post(url , data = payload , headers = headers, stream = True)
+	except requests.exceptions.NewConnectionError:
+		print("Could not reach website. Company Code: " + company_code + " dropped.")
+		return False
+	with open(file_name , 'wb') as file:
+		for chunk in r.iter_content(chunk_size = 128):
+			file.write(chunk)
+	return True
+
+def main(url, retry_mode = False, remaining_codes = []):
 	r = requests.get(url)
 	soup = BeautifulSoup(r.content, 'html.parser')
 	payload = gather_request_payload(soup)
-	company_codes = fetch_company_codes()
+	if remaining_codes:
+		company_codes = remaining_codes
+	else:
+		company_codes = fetch_company_codes()
+		print("Successfully fetched company codes...")
+	failed_attempts_code = []
 	for idx, company_code in enumerate(company_codes):
-		if idx == 3:
-			break
-		file_name = 'data/sample_data_' + company_code + '.csv'
-		fetch_formatted_name(company_code)
-		try:
-			r = requests.post(url , data = payload , headers = headers, stream = True)
-		except NewConnectionError:
-			pass
-		with open(file_name , 'wb') as file:
-			for chunk in r.iter_content(chunk_size = 128):
-				file.write(chunk)
+		if idx%5 == 0:
+			print("Done " + str(idx) + '/' + str(len(company_codes)))
+		update_payload(company_code)
+		result = fetch_csv(url, payload, company_code)
+		if not result:
+			failed_attempts_code.append(company_code)
+	if failed_attempts_code:
+		print(str(len(failed_attempts_code)) + " hits were missed. Please Run the script again to fetch them.")
+	else:
+		print('Successfully collected data. Bye.')
 
 if __name__ == "__main__":
-	url = 'https://www.bseindia.com/markets/equity/EQReports/StockPrcHistori.aspx?expandable=14&flag=0'
-	hit(url)
-
+	root_url = 'https://www.bseindia.com/markets/equity/EQReports/StockPrcHistori.aspx?expandable=7&flag=0'
+	remaining_codes = if_retry_required()
+	if remaining_codes:
+		print('Previous files found, resuming scraping...')
+		main(root_url, retry_mode = True, remaining_codes = remaining_codes)
+	else:
+		main(root_url)
 
 
