@@ -102,9 +102,12 @@ def hit(url):
 	for idx, company_code in enumerate(company_codes):
 		if idx == 3:
 			break
-		file_name = 'data/data_' + company_code + '.csv'
+		file_name = 'data/sample_data_' + company_code + '.csv'
 		fetch_formatted_name(company_code)
-		r = requests.post(url , data = payload , headers = headers, stream = True)
+		try:
+			r = requests.post(url , data = payload , headers = headers, stream = True)
+		except NewConnectionError:
+			pass
 		with open(file_name , 'wb') as file:
 			for chunk in r.iter_content(chunk_size = 128):
 				file.write(chunk)
