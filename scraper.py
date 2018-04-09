@@ -4,6 +4,11 @@ import pprint
 import re
 import os
 
+time_frame = 'M'
+
+time_frame_params_M = {'DMY': 'rdbMonthly', 'cmbMonthly': '01', 'cmbMYear': '1995', 'hidDMY': 'M', 'hidFromDate': '01/01/1995', 'hidToDate': '04/09/2018'}
+time_frame_params_Y = {'DMY': 'rdbYearly', 'cmbYearly': '1996', 'hidDMY': 'Y', 'hidFromDate' : '19960101', 'hidToDate': '20180409'}
+
 headers = { 'User-Agent' : 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:59.0) Gecko/20100101 Firefox/59.0'}
 
 payload_from_html = ['__VIEWSTATE',
@@ -19,9 +24,7 @@ desired_payload_keys = {'__VIEWSTATE' : '' ,
 							'WINDOW_NAMER' : '', 
 							'ctl00$ContentPlaceHolder1$btnDownload.x' : '43', 
 							'ctl00$ContentPlaceHolder1$btnDownload.y' : '14',
-							'ctl00$ContentPlaceHolder1$cmbYearly' : '2001', 
 							'ctl00$ContentPlaceHolder1$DDate' : '', 
-							'ctl00$ContentPlaceHolder1$DMY' : 'rdbYearly',
 							'ctl00$ContentPlaceHolder1$GetQuote1_smartSearch' : '', 
 							'ctl00$ContentPlaceHolder1$GetQuote1_smartSearch2' : 'Enter+Security+Name+/+Code+/+ID', 
 							'ctl00$ContentPlaceHolder1$hdflag' : '0', 
@@ -31,10 +34,7 @@ desired_payload_keys = {'__VIEWSTATE' : '' ,
 							'ctl00$ContentPlaceHolder1$Hidden1' : '', 
 							'ctl00$ContentPlaceHolder1$Hidden2' : '',
 							'ctl00$ContentPlaceHolder1$hiddenScripCode' : '', 
-							'ctl00$ContentPlaceHolder1$hidDMY' : 'Y', 
-							'ctl00$ContentPlaceHolder1$hidFromDate' : '19950101', 
 							'ctl00$ContentPlaceHolder1$hidOldDMY' : '', 
-							'ctl00$ContentPlaceHolder1$hidToDate' : '20180403', 
 							'ctl00$ContentPlaceHolder1$hidYear' : '', 
 							'ctl00$ContentPlaceHolder1$search' : 'rad_no1', 
 							'myDestination' : '#',
@@ -107,7 +107,35 @@ def update_payload(company_code):
 	desired_payload_keys['ctl00$ContentPlaceHolder1$hdnCode'] = company_code
 	desired_payload_keys['ctl00$ContentPlaceHolder1$hiddenScripCode'] = company_code
 
+def _add_unnecessary_string(part_payload):
+	unnecessary_string = 'ctl00$ContentPlaceHolder1$'
+	'''
+	This is a strange thing is happening. Apparently the data structure dict_keys([key1, key2, ...])
+	is somewhat dynamic in nature during the execuiton of code. So the line,
+	original_keys = part_payload.keys(), didn't work properly.
+	After this line, the original_keys kept on changing during the execution of for loop. Hence, I supplied the unwinded list instead.
+	'''
+	original_keys = [*part_payload.keys()]
+	for key in original_keys:
+		new_key = unnecessary_string + key
+		value = part_payload.pop(key)
+		part_payload[new_key] = value
+	
 
+def _add_time_frame_payloads():
+	'''
+	Why global was used?
+	Refer to: https://stackoverflow.com/questions/14323817/global-dictionaries-dont-need-keyword-global-to-modify-them/14323961#14323961
+	and to, 
+	link: https://stackoverflow.com/questions/3657163/how-to-reset-global-variable-in-python/3657214#3657214
+	'''
+	global desired_payload_keys
+	if time_frame == 'M':
+		_add_unnecessary_string(time_frame_params_M)
+		desired_payload_keys = {**desired_payload_keys, **time_frame_params_M}
+	if time_frame == 'Y':
+		_add_unnecessary_string(time_frame_params_Y)
+		desired_payload_keys = {**desired_payload_keys, **time_frame_params_Y}
 
 def gather_request_payload(soup):
 	input_tags = soup.find_all('input')
@@ -128,8 +156,8 @@ def gather_request_payload(soup):
 	print("Website: True")
 	return desired_payload_keys
 
-def fetch_csv(url, payload, company_code):
-	file_name = 'data/data_' + company_code + '.csv'
+def fetch_csv(url, payload, company_code, file_name_prefix):
+	file_name = 'data/' + file_name_prefix + '_data_' + company_code + '.csv'
 	try:
 		r = requests.post(url , data = payload , headers = headers, stream = True)
 	except requests.exceptions.NewConnectionError:
@@ -140,9 +168,10 @@ def fetch_csv(url, payload, company_code):
 			file.write(chunk)
 	return True
 
-def main(url, retry_mode = False, remaining_codes = []):
+def main(url, file_name_prefix, retry_mode = False, remaining_codes = []):
 	r = requests.get(url)
 	soup = BeautifulSoup(r.content, 'html.parser')
+	_add_time_frame_payloads()
 	payload = gather_request_payload(soup)
 	if remaining_codes:
 		company_codes = remaining_codes
@@ -154,7 +183,7 @@ def main(url, retry_mode = False, remaining_codes = []):
 		if idx%5 == 0:
 			print("Done " + str(idx) + '/' + str(len(company_codes)))
 		update_payload(company_code)
-		result = fetch_csv(url, payload, company_code)
+		result = fetch_csv(url, payload, company_code, file_name_prefix)
 		if not result:
 			failed_attempts_code.append(company_code)
 	if failed_attempts_code:
@@ -164,11 +193,19 @@ def main(url, retry_mode = False, remaining_codes = []):
 
 if __name__ == "__main__":
 	root_url = 'https://www.bseindia.com/markets/equity/EQReports/StockPrcHistori.aspx?expandable=7&flag=0'
+	mode = input("Enter 'M' for monthly and 'Y' for yearly: ")
+	if mode == 'Y':
+		time_frame = 'Y'
+		file_name_prefix = 'Y'
+	elif mode == 'M':
+		file_name_prefix = 'M'
+	else:
+		print('Wrong input, run the script agian.')
+		exit()
 	remaining_codes = if_retry_required()
 	if remaining_codes:
 		print('Previous files found, resuming scraping...')
-		main(root_url, retry_mode = True, remaining_codes = remaining_codes)
+		main(root_url, file_name_prefix, retry_mode = True, remaining_codes = remaining_codes)
 	else:
-		main(root_url)
-
+		main(root_url, file_name_prefix)
 
