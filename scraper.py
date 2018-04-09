@@ -4,6 +4,8 @@ import pprint
 import re
 import os
 
+from additional_attributes import fetch_company_type
+
 time_frame = 'M'
 
 time_frame_params_M = {'DMY': 'rdbMonthly', 'cmbMonthly': '01', 'cmbMYear': '1995', 'hidDMY': 'M', 'hidFromDate': '01/01/1995', 'hidToDate': '04/09/2018'}
@@ -94,7 +96,6 @@ def fetch_company_codes():
 
 def update_payload(company_code):
 	url = 'https://www.bseindia.com/SiteCache/90D/SmartGetQuoteData.aspx?Type=EQ&text='
-	#company_code = '500238'
 	r = requests.get(url+company_code)
 	soup = BeautifulSoup(r.content, 'html.parser')
 	anchors = soup.find_all('a')
@@ -103,7 +104,11 @@ def update_payload(company_code):
 	names = text_raw.split('|')
 	company_name = names[0].replace(' ', '+')
 	hidCompanyVal = names[1]
-	#print(company_name)
+	'''
+	Fetching addtional attributes.
+	'''
+	fetch_company_type(company_name, company_code)	
+
 	desired_payload_keys['ctl00$ContentPlaceHolder1$GetQuote1_smartSearch'] = company_name
 	desired_payload_keys['ctl00$ContentPlaceHolder1$hidCompanyVal'] = hidCompanyVal
 	desired_payload_keys['ctl00$ContentPlaceHolder1$hdnCode'] = company_code
@@ -162,7 +167,7 @@ def gather_request_payload(soup):
 	return desired_payload_keys
 
 def fetch_csv(url, payload, company_code, file_name_prefix):
-	file_name = 'data/' + file_name_prefix + '_data_' + company_code + '.csv'
+	file_name = 'data/' + file_name_prefix + '_' + payload['ctl00$ContentPlaceHolder1$hidCompanyVal'] + '_data_' + company_code + '.csv'
 	try:
 		r = requests.post(url , data = payload , headers = headers, stream = True)
 	except requests.exceptions.NewConnectionError:
