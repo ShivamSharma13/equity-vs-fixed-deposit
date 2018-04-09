@@ -8,6 +8,7 @@ time_frame = 'M'
 
 time_frame_params_M = {'DMY': 'rdbMonthly', 'cmbMonthly': '01', 'cmbMYear': '1995', 'hidDMY': 'M', 'hidFromDate': '01/01/1995', 'hidToDate': '04/09/2018'}
 time_frame_params_Y = {'DMY': 'rdbYearly', 'cmbYearly': '1996', 'hidDMY': 'Y', 'hidFromDate' : '19960101', 'hidToDate': '20180409'}
+time_frame_params_D = {'DMY': 'rdbDaily', 'hidDMY': 'D', 'hidFromDate': '11/01/2016', 'hidToDate': '11/30/2016', 'txtFromDate':	'01/11/2016', 'txtToDate': '30/11/2016'}
 
 headers = { 'User-Agent' : 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:59.0) Gecko/20100101 Firefox/59.0'}
 
@@ -40,7 +41,7 @@ desired_payload_keys = {'__VIEWSTATE' : '' ,
 							'myDestination' : '#',
 						}
 
-def if_retry_required():
+def if_retry_required(file_search_regex):
 	os.chdir('data')
 	dir_files = os.listdir()
 	if 'company_codes.txt' in dir_files:
@@ -49,9 +50,10 @@ def if_retry_required():
 			company_codes = file_content.split(' ')
 		fetched_codes = []
 		for file in dir_files:
-			regex = re.search(r'[\d]{6}', str(file))
+			regex = re.search(file_search_regex, str(file))
 			if regex:
-				indices = regex.span()
+				indices = re.search(r'[\d]{6}', str(file)).span()
+				#indices extracts the code embeded in the fie name.
 				fetched_codes.append(file[indices[0]:indices[1]])
 		remaining_codes = []
 		for company_code in company_codes:
@@ -110,7 +112,7 @@ def update_payload(company_code):
 def _add_unnecessary_string(part_payload):
 	unnecessary_string = 'ctl00$ContentPlaceHolder1$'
 	'''
-	This is a strange thing is happening. Apparently the data structure dict_keys([key1, key2, ...])
+	This is a strange thing happening. Apparently the data structure dict_keys([key1, key2, ...])
 	is somewhat dynamic in nature during the execuiton of code. So the line,
 	original_keys = part_payload.keys(), didn't work properly.
 	After this line, the original_keys kept on changing during the execution of for loop. Hence, I supplied the unwinded list instead.
@@ -136,6 +138,9 @@ def _add_time_frame_payloads():
 	if time_frame == 'Y':
 		_add_unnecessary_string(time_frame_params_Y)
 		desired_payload_keys = {**desired_payload_keys, **time_frame_params_Y}
+	if time_frame == 'D':
+		_add_unnecessary_string(time_frame_params_D)
+		desired_payload_keys = {**desired_payload_keys, **time_frame_params_D}
 
 def gather_request_payload(soup):
 	input_tags = soup.find_all('input')
@@ -193,16 +198,22 @@ def main(url, file_name_prefix, retry_mode = False, remaining_codes = []):
 
 if __name__ == "__main__":
 	root_url = 'https://www.bseindia.com/markets/equity/EQReports/StockPrcHistori.aspx?expandable=7&flag=0'
-	mode = input("Enter 'M' for monthly and 'Y' for yearly: ")
+	mode = input("Enter: \n'M' for monthly \n'Y' for yearly \n'D' for Daily: ")
 	if mode == 'Y':
+		file_search_regex = r'^Y\w+[\d]{6}'
 		time_frame = 'Y'
 		file_name_prefix = 'Y'
 	elif mode == 'M':
+		file_search_regex = r'^M\w+[\d]{6}'
 		file_name_prefix = 'M'
+	elif mode == 'D':
+		time_frame = 'D'
+		file_name_prefix = 'D'
+		file_search_regex = r'^D\w+[\d]{6}'
 	else:
 		print('Wrong input, run the script agian.')
 		exit()
-	remaining_codes = if_retry_required()
+	remaining_codes = if_retry_required(file_search_regex)
 	if remaining_codes:
 		print('Previous files found, resuming scraping...')
 		main(root_url, file_name_prefix, retry_mode = True, remaining_codes = remaining_codes)
